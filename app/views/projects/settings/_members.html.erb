@@ -1,5 +1,3 @@
-<% roles = Role.find_all_givable -%>
-
 <div class="box">
 
 <div class="contextual">
@@ -8,35 +6,41 @@
 
 <h3><%= l(:label_organization_plural) %></h3>
 
-<% if @project.organization_memberships.any? %>
-<table class="list organizations">
-  <thead><tr>
-    <th><%= l(:label_organization) %></th>
-    <th><%= l(:label_role_plural) %></th>
-    <th><%= l(:label_user_plural) %></th>
-    <th style="width:15%"> </th>
-  </tr></thead>
-  <tbody>
-  <% @project.organization_memberships.all(:include => [:organization, :roles]).each do |m| %>
-    <tr id="orga-<%= m.id %>">
-      <%= render :partial => 'projects/settings/members_organization', :locals => {:m => m, :roles => roles} %>
-    </tr>
-  <% end %>
-  </tbody>
-</table>
-<% end %>
-
-<%= form_for :membership, :url => { :controller => 'organization_memberships', :action => 'create_in_project', :project_id => @project },
+<%= form_for :membership, :url => { :controller => 'organizations', :action => 'create_membership_in_project', :project_id => @project },
              :remote => true, :html => {:id => 'organization-form', :style => 'display:none;'} do |f| -%>
   <p>
-    <%= hidden_field_tag "membership[project_id]", @project.id %>
-    <%= f.select "organization_id", nested_set_options(Organization) { |i| "#{'--' * i.level} #{i.name}" }, 
-                 :disabled => @project.organizations.map(&:id), :include_blank => true, :label => :field_parent_organization %>
-    <% roles.each do |role| %>
-      <label><%= check_box_tag 'membership[role_ids][]', role.id %> <%=h role %></label>
-    <% end %>
-    <%= submit_tag l(:button_save) %>
+    <%= f.select "organization_id", nested_set_options(Organization) { |i| i.fullname }, 
+                 { :disabled => @project.organizations.map(&:id), :include_blank => true,
+                   :label => :field_parent_organization },
+                 { :class => "orga-select2" } %>
+    <%= submit_tag l(:button_add) %>
   </p>
 <% end -%>
+
+<% organizations = @project.organizations %>
+
+<table class="list organizations">
+  <thead><tr>
+    <th class="organization"><%= l(:label_organization) %></th>
+    <th class="role"><%= l(:label_role_plural) %></th>
+    <th class="buttons"> </th>
+  </tr></thead>
+  <tbody>
+
+  <% @project.members.joins(:user).where('users.organization_id IS NULL').each do |member| %>
+    <%= render :partial => 'projects/settings/members_user',
+               :locals => {:member => member,
+                           :roles => Role.givable.sorted,
+                           :organization_roles => []} %>
+  <% end %>
+  <% organizations.sort_by do |o|
+       "#{o.try(:fullname)}"
+     end.each do |o| %>
+    <% @o = o %>
+    <%= render :partial => 'projects/settings/members_organization' %>
+  <% end %>
+  <%= render :partial => 'projects/settings/non_member_groups' %>
+  </tbody>
+</table>
 
 </div>

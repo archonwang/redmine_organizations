@@ -1,0 +1,23 @@
+# Read about fixtures at http://ar.rubyonrails.org/classes/Fixtures.html
+organization_001:
+  id: 1
+  name: Org A
+  description: Description of organization A
+  parent_id: 
+  direction: true
+  lft: 1
+  rgt: 6
+organization_002:
+  id: 2
+  name: Team A
+  description: Team A in org A
+  parent_id: 1
+  lft: 2
+  rgt: 3
+organization_003:
+  id: 3
+  name: Team B
+  description: Team B in org B
+  parent_id: 1
+  lft: 4
+  rgt: 5

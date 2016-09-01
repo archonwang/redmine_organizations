@@ -13,34 +13,44 @@
 
 <div class="splitcontentleft organization">
 <h3><%=l(:label_project_plural)%></h3>
-<ul>
-<% for membership in @memberships %>
-	<li><%= link_to_organization_membership(membership) %></li>
-<% end %>
-<% @submemberships.keys.sort_by(&:fullname).each do |suborganization| %>
-  <% memberships = @submemberships[suborganization] %>
-  <li>
-    <%= link_to_organization suborganization, :link_ancestors => false %>
-    <% if memberships.any? %>
+<ul class=root>
+  <li class=selected-organization>
+    <%= link_to_organization @organization, :link_ancestors => false %>
+    <% if @projects.any? %>
     <ul>
-      <% for membership in memberships %>
-        <li><%= link_to_organization_membership(membership) %></li>
+      <% for project in @projects %>
+        <li><%= link_to_organization_membership(project, @organization.roles_by_project(project)) %></li>
       <% end %>
     </ul>
     <% end %>
   </li>
-<% end %>
+  <% @subprojects_by_organization.keys.sort_by(&:fullname).each do |suborganization| %>
+    <% subprojects = @subprojects_by_organization[suborganization] %>
+    <li>
+      <%= link_to_organization suborganization, :link_ancestors => false %>
+      <% if subprojects.any? %>
+      <ul>
+        <% for project in subprojects %>
+          <li><%= link_to_organization_membership(project, suborganization.roles_by_project(project)) %></li>
+        <% end %>
+      </ul>
+      <% end %>
+    </li>
+  <% end %>
 </ul>
 
-<h3><%=l(:label_user_plural)%></h3>
-<ul>
-<% for user in @users %>
-	<li><%= link_to_user(user) %></li>
-<% end %>
+<h3><%= "#{ l(:label_user_plural)} (#{@subusers_count})" %></h3>
+<ul class=root>
+  <li class=selected-organization>
+    <%= link_to_organization @organization, :link_ancestors => false %>
+    <%= "(#{@users.count}) :" if @users.any? %>
+    <%= @users.map{|u| link_to_user(u)}.join(", ").html_safe %>
+  </li>
 <% @subusers.keys.sort_by(&:fullname).each do |suborganization| %>
   <% users = @subusers[suborganization] %>
   <li>
-    <%= h suborganization.name %> :
+    <%= link_to_organization suborganization, :link_ancestors => false %>
+    <%= "(#{users.count}) :" if users.any? %>
     <%= users.map{|u| link_to_user(u)}.join(", ").html_safe %>
   </li>
 <% end %>
@@ -55,7 +65,7 @@
 <h3><%= link_to l(:label_activity), :controller => 'projects', :action => 'activity', :id => nil, :organization_id => @organization, :from => @events_by_day.keys.first %></h3>
 
 <p>
-<%=l(:label_reported_issues)%>: <%= Issue.count(:conditions => {:author_id => @organization.users.map(&:id)}) %>
+<%=l(:label_reported_issues)%>: <%= Issue.where(:author_id => @organization.users.map(&:id)).count %>
 </p>
 
 <div id="activity">

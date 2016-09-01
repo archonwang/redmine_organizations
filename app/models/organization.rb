@@ -1,11 +1,16 @@
 class Organization < ActiveRecord::Base
   unloadable
   acts_as_nested_set
-  
+
+  validates_presence_of :name
+  validates :name, :uniqueness => {:scope => :parent_id}
+  validates_format_of :mail, :with => /\A([^@\s]+)@((?:[-a-z0-9]+\.)+[a-z]{2,})\z/i, :allow_blank => true
+
   has_many :users
-  has_many :memberships, :class_name => 'OrganizationMembership', :dependent => :delete_all
-  has_many :projects, :through => :memberships
-  
+  has_many :organization_roles
+
+  attr_accessible :name, :parent_id, :description, :mail, :direction
+
   SEPARATOR = '/'
 
   # Reorder tree after save on the fly
@@ -27,7 +32,7 @@ class Organization < ActiveRecord::Base
   end
   
   def fullname
-    ancestors.all(:order => 'lft').map do |ancestor|
+    @fullname ||= ancestors.order('lft').all.map do |ancestor|
       ancestor.name+Organization::SEPARATOR
     end.join("") + name
   end
@@ -35,4 +40,69 @@ class Organization < ActiveRecord::Base
   def direction_organization
     @direction_organization ||= (direction? || root? ? self : parent.direction_organization)
   end
+
+  def memberships
+    Member.joins(:user).where("users.organization_id = ? AND users.status = ?", self.id, User::STATUS_ACTIVE)
+  end
+
+  def projects
+    Project.where("id IN (?)", self.memberships.pluck(:project_id).uniq)
+  end
+
+  def roles_by_project(project)
+    Role.joins(:member_roles => :member).where("user_id IN (?) AND project_id = ?", self.users.active.map(&:id), project.id).uniq
+  end
+
+  def default_roles_by_project(project)
+    organization_roles.includes(:role).where("project_id = ?", project.id).map(&:role).reject{|r| r.blank?}.sort_by { |r| r.position}.uniq
+  end
+
+  # Yields the given block for each organization with its level in the tree
+  def self.organization_tree(organizations, &block)
+    ancestors = []
+    organizations.sort_by(&:lft).each do |organization|
+      while (ancestors.any? && !organization.is_descendant_of?(ancestors.last))
+        ancestors.pop
+      end
+      yield organization, ancestors.size
+      ancestors << organization
+    end
+  end
+
+  def update_project_members(project_id, new_members, new_roles, old_organization_roles)
+    delete_old_project_members(project_id, new_members)
+    new_members.each do |user|
+      add_member_through_organization(user, project_id, new_roles, old_organization_roles)
+    end
+  end
+
+  def delete_old_project_members(project_id, excluded = [])
+    current_members = User.joins(:members).where("organization_id = ? AND project_id = ?", self.id, project_id).uniq
+    current_members.each do |user|
+      next if excluded.include?(user)
+      user.destroy_membership_through_organization(project_id)
+    end
+  end
+
+  def delete_all_organization_roles(project_id, excluded = [])
+    organization_roles.where(project_id: project_id).each do |r|
+      next if excluded.include?(r)
+      r.try(:destroy) if r.id
+    end
+  end
+
+  private
+
+    def add_member_through_organization(user, project_id, new_roles, old_organization_roles)
+      member = Member.where(user_id: user.id, project_id: project_id).first_or_initialize
+      old_personal_roles = member.roles - old_organization_roles
+      member.roles = []
+      (new_roles | old_personal_roles).each do |new_role|
+        unless member.roles.include?(new_role)
+          member.roles << new_role
+        end
+      end
+      member.save! if member.project.present? && member.user.present?
+    end
+
 end

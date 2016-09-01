@@ -1,24 +1,35 @@
-<div class="box">
-  <%= form_for(:organizations, :url => { :controller => 'organizations', :action => 'copy_user' }) do %>
-  <%=l(:label_copy_organizations_and_involvements_from)%>
-  #<%=text_field_tag 'copy[user_from]', '', :size=>"5", :style=>"width:3em;"%>
-  <%= javascript_tag "observeSearchfield('copy_user_from', 'user', '#{escape_javascript autocomplete_user_from_id_organizations_path}')" %>
-  <span id="user"></span>
-  <%=hidden_field_tag 'copy[user_to]', @user.id%>
-  <br/>
-  <%= submit_tag l(:button_copy) %>
-  <% end %>
-</div>
-<%= form_for @user, :url => { :controller => 'users', :action => "update", :tab => nil }, :html => { :method => :put, :class => nil } do %>
-<div class="box">
-<% Organization.all(:order=>'lft').each do |organization| %>
-  <p class="organization idnt <%= organization.level > 0 ? "idnt-#{organization.level}" : nil %>">
-    <label>
-      <%= radio_button_tag 'user[organization_id]', organization.id, @user.organization == organization %> 
-      <%= organization.direction? ? content_tag(:strong, organization.name) : h(organization.name) %>
-    </label>
-  </p>
+
+<%= form_for @user, :url => { :controller => 'users', :action => "update", :tab => nil }, :html => { :method => :put, :class => nil } do |f| %>
+  <div class="box">
+    <h4><%= l :update_user_orga, username: @user %></h4>
+    <%= f.select "organization_id", nested_set_options(Organization) { |i| i.fullname },
+               { :include_blank => true },
+               { :class => "orga-select2",
+                 :onChange=>"javascript: update_users_from_orga();"} %>
+
+    <p>
+      <%= f.radio_button :orga_update_method, 'keep', checked: true %>
+      <%= f.label :orga_update_method, l(:memberships_keep), :value => 'keep' %>
+    </p>
+    <p>
+      <%= f.radio_button :orga_update_method, 'remove' %>
+      <%= f.label :orga_update_method, l(:memberships_remove), :value => 'remove' %>
+    </p>
+    <p>
+      <%= f.radio_button :orga_update_method, 'replace' %>
+      <%= f.label :orga_update_method, l(:memberships_replace), :value => 'replace' %>
+      <%= select_tag :copy_user,
+                     options_from_collection_for_select(User.sorted.active.where("organization_id = ? AND id != ?",
+                                                                 @user.organization.try(:id),
+                                                                 @user.id), :id, :name ) %>
+    </p>
+
+  </div>
+  <%= submit_tag l(:button_save) %>
 <% end %>
-</div>
-<%= submit_tag l(:button_save) %>
-<% end %>
+
+<script>
+  function update_users_from_orga(){
+    $.post("fetch_users_by_orga.js", { orga_id: $('#user_organization_id').val() }, function() {});
+  }
+</script>
